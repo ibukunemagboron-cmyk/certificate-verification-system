@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+	<button onclick="connectWallet()">Connect Wallet</button>
+<head>
+    <title>Certificate Verification System</title>
+</head>
+<body>
+
+<h2>Upload Certificate (Store on Blockchain)</h2>
+<input type="file" id="fileInput">
+<button onclick="storeHash()">Store Certificate</button>
+
+<h2>Verify Certificate</h2>
+<input type="file" id="verifyInput">
+<button onclick="verifyHash()">Verify Certificate</button>
+
+<p id="result"></p>
+
+<h3>Certificate QR Code</h3>
+<div id="qrcode"></div>
+
+<p id="certificateHash"></p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/web3@1.7.5/dist/web3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+const contractAddress = "0xE4B1aF5A50Fcb07fC713E0ddf0deeb74B7E38FFF";
+
+const abi = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "hash",
+				"type": "string"
+			}
+		],
+		"name": "storeCertificate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"name": "verifiedCertificates",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "hash",
+				"type": "string"
+			}
+		],
+		"name": "verifyCertificate",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+
+let web3;
+let contract;
+
+async function connectWallet() {
+    if (typeof window.ethereum !== 'undefined') {
+        try {
+            const accounts = await window.ethereum.request({
+                method: 'eth_requestAccounts'
+            });
+
+            // ✅ Initialize Web3 AFTER connection
+            web3 = new Web3(window.ethereum);
+
+            // ✅ Initialize contract
+            contract = new web3.eth.Contract(abi, contractAddress);
+
+            console.log("Connected:", accounts[0]);
+            alert("Wallet Connected!");
+
+        } catch (error) {
+            console.error(error);
+            alert("Connection failed");
+        }
+    } else {
+        alert("MetaMask not detected");
+    }
+}
+
+function generateHash(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function () {
+            const wordArray = CryptoJS.lib.WordArray.create(reader.result);
+            const hash = CryptoJS.SHA256(wordArray).toString();
+            resolve(hash);
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+
+async function storeHash() {
+
+    if (!web3 || !contract) {
+        alert("Please connect wallet first!");
+        return;
+    }
+
+    const file = document.getElementById("fileInput").files[0];
+
+    if (!file) {
+        alert("Please select a certificate.");
+        return;
+    }
+
+    const hash = await generateHash(file);
+
+    const accounts = await web3.eth.getAccounts();
+
+    await contract.methods.storeCertificate(hash).send({
+        from: accounts[0]
+    });
+
+    alert("Certificate stored successfully!");
+
+    // Clear old QR Code
+    document.getElementById("qrcode").innerHTML = "";
+
+	document.getElementById("certificateHash").innerText =
+"Certificate Hash: " + hash;
+
+    // Generate new QR Code
+    new QRCode(
+        document.getElementById("qrcode"),
+        {
+            text: hash,
+            width: 200,
+            height: 200
+        }
+    );
+}
+
+
+async function verifyHash() {
+    if (!web3 || !contract) {
+        alert("Please connect wallet first!");
+        return;
+    }
+
+    const file = document.getElementById("verifyInput").files[0];
+    const hash = await generateHash(file);
+
+    const result = await contract.methods.verifyCertificate(hash).call();
+
+    document.getElementById("result").innerText =
+        result ? "VALID Certificate" : "FAKE Certificate";
+}
+</script>
+
+</body>
+</html>
